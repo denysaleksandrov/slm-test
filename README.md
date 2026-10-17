@@ -1,6 +1,6 @@
 # mini-GPT: a text generator in PyTorch, from a bigram table to a transformer
 
-You train a language model on text, and it learns to continue text one character
+Train a language model on text, and it learns to continue text one character
 (or token) at a time. There are four models; each one adds one idea, and all four
 share the same data, training loop and sampling code:
 
