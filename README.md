@@ -82,8 +82,6 @@ For less memory use `--batch_size 8 --grad_accum_steps 8`; the training math is 
 | [TinyStories](https://huggingface.co/datasets/roneneldan/TinyStories) | 2.1M simple stories, GPT-2 BPE tokens | ~470M tokens | `data/tinystories/prepare.py` |
 | [FineWeb-Edu](https://huggingface.co/datasets/HuggingFaceFW/fineweb-edu) | real educational web text (`sample-10BT`) | 10B tokens | not included yet; the natural next step for big GPUs |
 
-Hugging Face hosts the datasets. Google Colab provides compute (a free GPU), not datasets.
-
 Each prepare script turns the text into token ids once and stores them in
 `train.bin`/`val.bin` (flat `uint16`). Training reads random windows from those files
 with `np.memmap`, so a 20GB dataset doesn't need 20GB of RAM.
