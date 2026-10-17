@@ -6,6 +6,9 @@ numpy               # token arrays on disk (np.memmap)
 tiktoken            # GPT-2 BPE tokenizer (fast, from OpenAI)
 datasets            # Hugging Face datasets (TinyStories, FineWeb-Edu)
 
+# Export to Hugging Face format (export_hf.py)
+transformers        # GPT2LMHeadModel, tokenizer, safetensors
+
 # Exploration
 matplotlib          # loss curves, attention heatmaps
 jupyter             # notebooks/explore.ipynb

@@ -11,5 +11,6 @@ data/*/input.txt
 data/*/*.bin
 data/*/meta.pkl
 
-# training output (checkpoints)
+# training output (checkpoints) and exported Hugging Face models
 out/
+hf/

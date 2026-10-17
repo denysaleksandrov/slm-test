@@ -12,7 +12,7 @@ Examples
     python train.py --model gpt    --preset mac  --resume           # continue a run
 
     # 8 GPUs on one machine (DDP):
-    torchrun --standalone --nproc_per_node=8 train.py --model gpt --preset h100
+    torchrun --standalone --nproc_per_node=8 train.py --model gpt --preset gpt2-small
 
 Any config field can be overridden: --n_layer 4 --learning_rate 3e-4 --max_iters 2000 ...
 

@@ -3,7 +3,7 @@ All hyperparameters in one place.
 
 How the final config is built (later steps override earlier ones):
     1. defaults in the Config dataclass below
-    2. preset         (--preset tiny | mac | h100)  - "what hardware / how big"
+    2. preset         (--preset tiny | mac | gpt2-small)  - "how big / for what hardware"
     3. model defaults (--model bigram | mlp | attn | gpt) - e.g. bigram likes a higher LR
     4. command line   (any field, e.g. --n_layer 4 --learning_rate 3e-4)
 """
@@ -71,10 +71,12 @@ PRESETS = {
     # fast_attn: same results as explicit attention; on MPS it saves no memory or time
     # (PyTorch has no memory-efficient attention kernel for MPS), on CUDA it does both.
     "mac": dict(batch_size=16, grad_accum_steps=4, eval_iters=400, eval_interval=500, fast_attn=True),
-    # GPT-2 small shape (~124M params) for TinyStories / FineWeb on H100s.
+    # GPT-2 small shape (~124M params) for TinyStories / FineWeb on CUDA GPUs with enough
+    # memory (H100/H200/A100, RTX 6000-class). Hardware-neutral: on a 48GB card use
+    # --batch_size 16 --grad_accum_steps 4 if 32 x 2 doesn't fit (same result).
     # Tokens per optimizer step = batch_size * block_size * grad_accum_steps * num_gpus
     #                           = 32 * 1024 * 2 * 8 GPUs = ~0.5M (the GPT-2 paper value)
-    "h100": dict(
+    "gpt2-small": dict(
         dataset="tinystories", batch_size=32, block_size=1024, grad_accum_steps=2,
         n_layer=12, n_head=12, n_embd=768, dropout=0.0,
         max_iters=20000, learning_rate=6e-4, min_lr=6e-5, warmup_iters=700,
