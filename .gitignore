@@ -1,0 +1,15 @@
+*~
+.DS_Store
+*.swp
+.env
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+
+# downloaded / generated data - recreate with data/*/prepare.py
+data/*/input.txt
+data/*/*.bin
+data/*/meta.pkl
+
+# training output (checkpoints)
+out/
