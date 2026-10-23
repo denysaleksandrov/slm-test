@@ -12,10 +12,17 @@ Output folder (what every HF-compatible tool expects):
     generation_config.json   default sampling settings
     model.safetensors        the weights (safe, memory-mappable format)
     tokenizer.json, ...      GPT-2 BPE tokenizer (same as tiktoken "gpt2" used in training)
+    tokenizer_config.json    tokenizer settings + chat template (see --chat_template)
     README.md                short model card
 
 Usage:
     python export_hf.py --ckpt_dir out/tinystories-gpt-gpt2-small --out_dir hf/mini-gpt-tinystories
+
+Chat template: this is a base model (it continues text), but chat APIs and playgrounds
+(/v1/chat/completions) need a template that turns a list of messages into one prompt.
+By default a "continue" template is added: the conversation is joined into one running
+text, so each reply continues the story. --chat_template none leaves it out, or pass a
+path to your own .jinja template.
 
 Only `--model gpt` checkpoints trained on a GPT-2 BPE dataset (e.g. tinystories) can be
 exported this way. The character-level Shakespeare models use a custom 65-character
@@ -25,6 +32,7 @@ Requires: pip install transformers
 """
 
 import argparse
+import json
 import os
 
 import torch
@@ -41,6 +49,13 @@ LINEAR_MAP = {  # ours (inside block i)    -> HF (inside transformer.h.i)
     "ffwd.net.2": "mlp.c_proj",           # feed-forward project 4C -> C
 }
 NORM_MAP = {"ln1": "ln_1", "ln2": "ln_2"}  # LayerNorms: weight and bias copied as-is
+
+# Chat template for a base model: join all non-system messages into one running text, so the
+# model's reply simply continues it. (Instruction-tuned models need role markers instead.)
+CHAT_TEMPLATES = {
+    "continue": "{%- for message in messages -%}{%- if message['role'] != 'system' -%}"
+                "{{ message['content'] }}{%- endif -%}{%- endfor -%}",
+}
 
 
 def to_hf(model, cfg, vocab_size):
@@ -99,9 +114,16 @@ def check_same_outputs(model, hf, vocab_size, block_size):
     assert diff < 1e-3, "converted model does not match - not saving"
 
 
-def model_card(cfg, ckpt, name):
+def model_card(cfg, ckpt, name, has_chat_template=False):
     loss = ckpt.get("val_loss", ckpt["best_val"])
     params = (12 * cfg.n_layer * cfg.n_embd ** 2) / 1e6
+    chat_section = ("""## Chat API
+
+There is no instruction tuning, but the tokenizer has a simple chat template so chat APIs and
+playgrounds work: all non-system messages are joined into one running text and the reply
+continues it. Write the beginning of a story as the user message; don't ask it questions.
+
+""" if has_chat_template else "")
     return f"""---
 library_name: transformers
 pipeline_tag: text-generation
@@ -111,7 +133,7 @@ pipeline_tag: text-generation
 
 A small GPT-2-architecture language model trained from scratch with the mini-GPT project
 (PyTorch). It is a **base model** (no instruction or chat tuning): give it the beginning of a
-text and it continues it. Use the completions API, not chat.
+text and it continues it. The completions API is the natural way to call it.
 
 | | |
 |---|---|
@@ -135,12 +157,34 @@ curl localhost:8000/v1/completions -H 'Content-Type: application/json' \\
      -d '{{"model": "{name}", "prompt": "Once upon a time", "max_tokens": 100}}'
 ```
 
-## Limitations
+{chat_section}## Limitations
 
 Small model trained on a single narrow dataset: expect fluent text in the style of the
 training data, not facts or reasoning. Not suitable for production use cases beyond demos
 and experiments.
 """
+
+
+def add_chat_template(out_dir: str, spec: str):
+    """
+    Write the chat template into tokenizer_config.json ("chat_template" key). That location is
+    read by every transformers version, old and new, so it works whatever version the serving
+    runtime bundles. Returns the template, or None for --chat_template none.
+    """
+    if spec == "none":
+        return None
+    template = CHAT_TEMPLATES[spec] if spec in CHAT_TEMPLATES else open(spec).read()
+    path = os.path.join(out_dir, "tokenizer_config.json")
+    with open(path) as f:
+        tok_cfg = json.load(f)
+    tok_cfg["chat_template"] = template
+    with open(path, "w") as f:
+        json.dump(tok_cfg, f, indent=2, ensure_ascii=False)
+    # newer transformers can also keep the template in a separate file; keep a single source
+    jinja = os.path.join(out_dir, "chat_template.jinja")
+    if os.path.exists(jinja):
+        os.remove(jinja)
+    return template
 
 
 def main():
@@ -151,6 +195,9 @@ def main():
     p.add_argument("--dtype", default="bfloat16", choices=["bfloat16", "float16", "float32"],
                    help="weight precision on disk (bf16 = half the size, what GPUs serve in anyway)")
     p.add_argument("--name", default=None, help="model name used in the model card (default: out_dir name)")
+    p.add_argument("--chat_template", default="continue",
+                   help="chat template for /v1/chat/completions: 'continue' (default: the conversation "
+                        "is joined into one text the model continues), 'none', or a path to a .jinja file")
     p.add_argument("--tokenizer", default="openai-community/gpt2",
                    help="where to get the GPT-2 tokenizer files: a Hugging Face repo id (needs internet once) "
                         "or a local folder with tokenizer.json, e.g. from a previous export (offline servers)")
@@ -185,9 +232,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(args.tokenizer)  # repo id (downloads ~4MB once) or local folder
     tokenizer.model_max_length = cfg.block_size
     tokenizer.save_pretrained(args.out_dir)
+    chat_template = add_chat_template(args.out_dir, args.chat_template)
     name = args.name or os.path.basename(os.path.normpath(args.out_dir))
     with open(os.path.join(args.out_dir, "README.md"), "w") as f:
-        f.write(model_card(cfg, ckpt, name))
+        f.write(model_card(cfg, ckpt, name, chat_template is not None))
 
     print(f"saved Hugging Face model to {args.out_dir}:")
     for fname in sorted(os.listdir(args.out_dir)):

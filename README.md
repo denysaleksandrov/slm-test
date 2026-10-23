@@ -163,8 +163,12 @@ curl localhost:8000/v1/completions -H 'Content-Type: application/json' \
      -d '{"model": "mini-gpt", "prompt": "Once upon a time", "max_tokens": 100}'
 ```
 
-It's a **base model**: it continues text, so use the completions API (`/v1/completions`). Chat
-endpoints need instruction tuning and a chat template, which this model doesn't have.
+It's a **base model**: it continues text, so the completions API (`/v1/completions`) is the
+natural way to call it. Chat APIs and playgrounds (`/v1/chat/completions`) need a *chat template*,
+so the export adds a simple one by default (`--chat_template continue`): all non-system messages
+are joined into one running text and the reply continues it. Write the start of a story as the
+user message; it won't follow instructions or answer questions. Use `--chat_template none` to
+leave it out, or pass a path to your own `.jinja` template.
 
 ## Deploy to a model-serving platform
 
@@ -208,7 +212,9 @@ podman push registry.example.com/models/mini-gpt-tinystories:1.0
 
 ### Things to know on any platform
 
-- **Use completions, not chat.** This is a base model (see above).
+- **Prefer completions over chat.** This is a base model; the default chat template makes chat
+  APIs work, but the model only continues text (see above). Without a template, chat requests
+  fail with `ChatTemplateResolutionError`.
 - **The context length is 1024 tokens** (`n_positions` in `config.json`). If the runtime asks
   for a maximum length, set it to 1024 (vLLM: `--max-model-len 1024`).
 - **The vocabulary is padded** to 50,304 entries, while the tokenizer has 50,257. Padding to a
